@@ -1,0 +1,72 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="ElectricalDeviceContOper" Id="{7a30059a-a33b-4d59-9eaf-d6bf3bb56ce2}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK ElectricalDeviceContOper
+VAR_INPUT
+	LineName					: STRING(40);
+	MachineName 				: STRING(40);
+	DeviceName					: STRING(40);
+	TimeStamp					: ULINT;
+	DeviceElectricalData 		: ElectrDataModbusTCP;
+	Enable						: BOOL;
+END_VAR
+VAR_OUTPUT
+	// REST API Endpoint
+	ApiEndpoint 			: STRING(255);
+	
+	// HTTP body as JSON payload
+	JsonPayload 			: STRING(4000);
+	
+	// HTTP POST Command
+	HttpPostCmd 			: BOOL;
+END_VAR
+VAR
+	SetParameter 			: BOOL := TRUE;		
+		
+	// JSON document
+  	fbJson			: FB_JsonSaxWriter;
+	fbJsonDataType	: FB_JsonReadWriteDataType;
+	stValues		: ElectrDeviceContOper_DataModel;	
+		
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(*
+This FB evaluates continously  electrical data from Sentron 7KT PAC1200
+and creates input data (API Endpoint and JSON body) for HTTP POST request
+*)
+
+IF Enable THEN	
+		
+		IF SetParameter THEN
+			SetParameter := FALSE;
+			HttpPostCmd := FALSE;
+			// create REST API endpoint
+			ApiEndpoint := 'electrical-device-continous-operation';
+			
+			// constant entry in json payload
+			stValues.LineName := LineName;
+			stValues.MachineName := MachineName;
+			stValues.DeviceName := DeviceName;
+		END_IF
+		
+		stValues.TimeStamp := TimeStamp;
+		stValues.ElectricalData := DeviceElectricalData;
+		
+		//create JSON message
+		fbJson.ResetDocument();
+		fbJsonDataType.AddJsonValueFromSymbol(fbJson, 
+												'ElectrDeviceContOper_DataModel', 
+												SIZEOF(stValues), 
+												ADR(stValues));
+		fbJson.CopyDocument(JsonPayload, SIZEOF(JsonPayload));
+		
+		HttpPostCmd := TRUE;
+ELSE
+		HttpPostCmd := FALSE;
+END_IF
+
+]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

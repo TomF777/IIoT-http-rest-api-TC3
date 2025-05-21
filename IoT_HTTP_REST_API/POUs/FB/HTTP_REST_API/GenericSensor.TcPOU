@@ -1,0 +1,70 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="GenericSensor" Id="{9632db95-4e08-4765-a67f-8324dcbe3bcc}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK GenericSensor
+VAR_INPUT
+	LineName	: STRING(40);
+	MachineName : STRING(40);
+	SensorName	: STRING(40);
+	TimeStamp	: ULINT;
+	Value		: REAL;	 
+	Enable		: BOOL; //enable sensor evaluation
+END_VAR
+VAR_OUTPUT
+	// REST API Endpoint
+	ApiEndpoint 	: STRING(255);
+	
+	// HTTP body as JSON payload
+	JsonPayload		: STRING(4000);
+	
+	// HTTP POST Command
+	HttpPostCmd 	: BOOL;
+END_VAR
+VAR
+	SetParameter : BOOL := TRUE;
+
+	stValues		: SingleSensor_DataModel;	
+	
+	// JSON document
+  	fbJson			: FB_JsonSaxWriter;
+	fbJsonDataType	: FB_JsonReadWriteDataType;
+	
+	// safety watchdog
+	tonWatchdog : TON;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(*
+This FB evaluates analog value and creates input data (API Endpoint and JSON body) for HTTP POST request 
+*) 
+
+IF Enable THEN
+	
+	IF SetParameter THEN
+		SetParameter := FALSE;
+		// create REST API endpoint
+		ApiEndpoint := '/generic-sensor';
+		
+		// constant entry in json payload
+		stValues.LineName := LineName;
+		stValues.MachineName := MachineName;
+		stValues.SensorName := SensorName;
+	END_IF
+	
+	stValues.timeStamp := TimeStamp;
+	stValues.SensorValue := Value;
+		
+	// create JSON message
+	
+	fbJson.ResetDocument();
+	fbJsonDataType.AddJsonValueFromSymbol(fbJson, 'SingleSensor_DataModel', SIZEOF(stValues), ADR(stValues));
+	fbJson.CopyDocument(JsonPayload, SIZEOF(JsonPayload));
+	
+	HttpPostCmd := TRUE;
+ELSE
+	HttpPostCmd := FALSE;
+END_IF;
+]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

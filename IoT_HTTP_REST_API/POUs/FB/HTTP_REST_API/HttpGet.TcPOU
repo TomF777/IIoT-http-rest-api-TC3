@@ -1,0 +1,126 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="HttpGet" Id="{d297206c-d3c6-4a96-87cb-70202b8fce4b}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK HttpGet
+VAR_INPUT
+	HostAddress				: STRING;
+	HostPort				: UINT;
+
+	// REST API endpoint
+	ApiEndpoint				: STRING(255);
+	
+	// HTTP GET Command
+	HttpGetCmd				: BOOL;
+END_VAR
+
+VAR
+	bStart 				: BOOL;
+	SetParameter		: BOOL:=TRUE;
+	
+	nSuccess			: UDINT;	
+	nFails				: UDINT;
+
+	HttpResponse		: STRING(5000);
+	nHttpState			: UDINT; 
+	
+	fbIotHttpClient		: FB_IotHttpClient;
+	URI					: STRING(255);
+												
+	fbIotHttpRequest	: FB_IotHttpRequest;
+	fbJsonDomParser		: FB_JsonDomParser;
+	JsonHttpResponse	: SJsonValue;
+	
+	JsonMessageMember01	: SJsonValue;
+	JsonMessageMember02	: SJsonValue;
+	JsonMessageMember03	: SJsonValue;
+
+	State				: UDINT;
+	idx					: UDINT;
+
+END_VAR
+VAR_OUTPUT
+	Error				: BOOL;
+	HttpResponseState	: UDINT;			// HTTP response state code
+	
+	OrderID				: STRING(255);
+	OrderNo				: INT;
+	ProductKey			: STRING(255);
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(*
+This FB creates HTTP GET request and gets JsonPayload as body from ApiEndpoint.
+*)
+
+IF SetParameter THEN
+	SetParameter := FALSE;
+	fbIotHttpClient.sHostName:=   HostAddress;
+	fbIotHttpClient.nHostPort:= HostPort;
+	fbIotHttpClient.bKeepAlive := TRUE;
+	fbIotHttpClient.tConnectionTimeout := T#10S;
+END_IF
+
+IF HttpGetCmd  THEN
+	HttpGetCmd := FALSE;
+	Error := FALSE;
+	State := 10;
+END_IF
+
+fbIotHttpClient.Execute();
+
+CASE State OF
+
+	10: // CREATE HTTP REQUEST
+		URI := ApiEndpoint;
+		IF fbIotHttpRequest.SendRequest(sUri := URI,
+										fbClient 		:= fbIotHttpClient,
+										eRequestType 	:= ETcIotHttpRequestType.HTTP_Get,
+										pContent 		:= 0,
+										nContentSize 	:= 0,
+										fbHeader 		:= 0)
+		THEN
+			State := 20;	
+		END_IF
+	
+		
+	20: // GET HTTP RESPONSE
+		IF NOT fbIotHttpRequest.bBusy THEN
+			IF NOT fbIotHttpRequest.bError THEN
+					HttpResponseState 	:= fbIotHttpRequest.nStatusCode;
+					fbIotHttpRequest.GetContent(pContent := ADR(HttpResponse),
+								nContentSize := SIZEOF(HttpResponse),
+								bSetNullTermination := TRUE);
+								
+					IF fbIotHttpRequest.nStatusCode >=200 AND fbIotHttpRequest.nStatusCode < 300 THEN
+						nSuccess 	:= nSuccess + 1;
+						State 		:= 30;
+					END_IF
+			ELSE
+				// error handling
+				nFails 		:= nFails + 1;
+				State 		:= 0;
+			END_IF
+		END_IF
+
+		
+	30: // HANDLE RESPONSE
+		JsonHttpResponse := fbIotHttpRequest.GetJsonDomContent(fbJsonDomParser);
+		IF JsonHttpResponse <> 0 THEN
+			
+			JsonMessageMember01 := fbJsonDomParser.FindMember(JsonHttpResponse,'id');
+			OrderID := fbJsonDomParser.GetString(JsonMessageMember01);
+			
+			JsonMessageMember02 := fbJsonDomParser.FindMember(JsonHttpResponse,'order_no');
+			OrderNo := DINT_TO_INT(fbJsonDomParser.GetInt(JsonMessageMember02));
+			
+			
+			JsonMessageMember03 := fbJsonDomParser.FindMember(JsonHttpResponse,'product_key');
+			ProductKey := fbJsonDomParser.GetString(JsonMessageMember03);
+				
+		END_IF
+		State := 0;
+	
+END_CASE]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

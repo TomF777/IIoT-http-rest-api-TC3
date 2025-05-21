@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <DUT Name="Order" Id="{c3f461d0-992e-41aa-b17d-87748ae5c27e}">
+    <Declaration><![CDATA[TYPE Order :
+STRUCT
+	id				:	INT;
+	LineName		:	STRING(50);
+	OrderNo			:	INT;
+	OrderState		:	STRING(50);
+END_STRUCT
+END_TYPE
+]]></Declaration>
+  </DUT>
+</TcPlcObject>

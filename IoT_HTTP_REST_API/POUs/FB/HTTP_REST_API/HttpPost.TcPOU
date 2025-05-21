@@ -1,0 +1,131 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="HttpPost" Id="{f1f37049-1973-4f51-97a0-b81b802c6e25}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK HttpPost
+VAR_INPUT
+
+	HostAddress				: STRING;
+	HostPort				: UINT;
+	
+	// Creditials 
+	UserName				: STRING;
+	UserPassword			: STRING;
+	
+	// REST API endpoint
+	ApiEndpoint				: STRING(255);
+	
+	// JSON 
+	JsonPayload				: STRING(4000);
+	
+	// HTTP POST Command
+	HttpPostCmd				: BOOL;
+END_VAR
+VAR
+	HeaderAdded			: BOOL;
+	SetParameter		: BOOL:=TRUE;
+	State				: UDINT;
+	
+	Success				: UDINT;	
+	Fails				: UDINT;
+	
+	
+	URI							: STRING(255);
+	
+	fbIotHttpClient				: FB_IotHttpClient;											
+	fbIotHttpHeaderFieldMap		: FB_IotHttpHeaderFieldMap;	 // header
+	fbIotHttpRequest			: FB_IotHttpRequest;
+	fbJsonDomParser				: FB_JsonDomParser;
+	fbJsonBody					: FB_JsonDomParser;
+	
+	
+	HttpResponse				: STRING(5000);
+	JsonHttpResponse			: SJsonValue;
+	JsonMessageMember			: SJsonValue;
+	
+	message						: STRING(255);
+END_VAR
+
+VAR_OUTPUT
+	Error						: BOOL;
+	HttpResponseState			: UDINT;
+END_VAR
+
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(*
+This FB creates HTTP POST request and sends JsonPayload as body to ApiEndpoint.
+*)
+
+IF SetParameter THEN
+	SetParameter := FALSE;
+	fbIotHttpClient.sHostName:=   HostAddress;
+	fbIotHttpClient.nHostPort:= HostPort;
+	fbIotHttpClient.bKeepAlive := TRUE;
+	fbIotHttpClient.tConnectionTimeout := T#10S;
+	
+	IF NOT HeaderAdded THEN
+		fbIotHttpHeaderFieldMap.AddField('Content-Type', 'application/json', FALSE);
+		
+	END_IF
+END_IF
+
+
+IF HttpPostCmd  THEN
+	HttpPostCmd := FALSE;
+	Error := FALSE;
+	State := 10;
+END_IF
+
+fbIotHttpClient.Execute();
+
+CASE State OF
+
+	10: // CREATE REQUEST 
+		URI := ApiEndpoint;
+		fbJsonBody.ParseDocument(JsonPayload);
+		
+		IF fbIotHttpRequest.SendJsonDomRequest(sUri := URI,
+										fbClient 		:= fbIotHttpClient,
+										eRequestType 	:= ETcIotHttpRequestType.HTTP_POST,
+										fbJson			:= fbJsonBody,
+										fbHeader 		:= fbIotHttpHeaderFieldMap)
+		THEN
+			State := 11;	
+		END_IF
+		
+	11: // GET RESPONSE
+		IF NOT fbIotHttpRequest.bBusy THEN
+			HttpResponseState 		:= fbIotHttpRequest.nStatusCode;
+			fbIotHttpRequest.GetContent(pContent := ADR(HttpResponse),
+										nContentSize := SIZEOF(HttpResponse),
+										bSetNullTermination := TRUE);
+			IF fbIotHttpRequest.bError THEN
+				Error 		:= TRUE;
+				// HANDLE ERROR HERE //
+				Fails 		:= Fails + 1;
+				State 		:= 0;
+			ELSE
+				Error 		:= FALSE;
+				Success 	:= Success + 1;
+				State 		:= 12;
+			END_IF
+		END_IF
+
+	12: // HANDLE RESPONSE
+		JsonHttpResponse := fbIotHttpRequest.GetJsonDomContent(fbJsonDomParser);
+		IF JsonHttpResponse <> 0 THEN
+			JsonMessageMember := fbJsonDomParser.FindMember(JsonHttpResponse,'Message');
+			message := fbJsonDomParser.GetString(JsonMessageMember);
+		END_IF
+		State := 0;
+END_CASE;
+
+
+
+
+
+
+]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>

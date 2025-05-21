@@ -1,0 +1,73 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TcPlcObject Version="1.1.0.1" ProductVersion="3.1.4024.15">
+  <POU Name="GenericState" Id="{ff519a79-22ab-45b2-84ef-736d8c8fe6fd}" SpecialFunc="None">
+    <Declaration><![CDATA[FUNCTION_BLOCK GenericState
+VAR_INPUT
+	LineName	: STRING(40);
+	MachineName : STRING(40);
+	StateName	: STRING(40);
+	TimeStamp	: ULINT;
+	Value		: INT;	 
+	Enable		: BOOL; 		//enable state evaluation
+END_VAR
+VAR_OUTPUT
+	// REST API Endpoint
+	ApiEndpoint 	: STRING(255);
+	
+	// HTTP body as JSON payload
+	JsonPayload		: STRING(4000);
+	
+	// HTTP POST Command
+	HttpPostCmd 	: BOOL;
+END_VAR
+VAR
+	SetParameter : BOOL := TRUE;
+
+	stValues		: SingleState_DataModel;	
+	
+	// JSON document
+  	fbJson			: FB_JsonSaxWriter;
+	fbJsonDataType	: FB_JsonReadWriteDataType;
+		
+
+	// temporary mqtt topic
+	TopicString : STRING;
+	
+	// safety watchdog
+	tonWatchdog : TON;
+END_VAR
+]]></Declaration>
+    <Implementation>
+      <ST><![CDATA[(*
+This FB evaluates single state and creates input data (API Endpoint and JSON body) for HTTP POST request 
+*) 
+
+IF Enable THEN
+	
+	IF SetParameter THEN
+		SetParameter := FALSE;
+		// create REST API endpoint
+		ApiEndpoint := '/generic-state';
+
+		// constant entry in json payload
+		stValues.LineName := LineName;
+		stValues.MachineName := MachineName;
+		stValues.StateName := StateName;
+	END_IF
+	
+	stValues.TimeStamp := TimeStamp;
+	stValues.StateValue := Value;
+		
+	// create JSON message
+	fbJson.ResetDocument();
+	fbJsonDataType.AddJsonValueFromSymbol(fbJson, 'SingleState_DataModel', SIZEOF(stValues), ADR(stValues));
+	fbJson.CopyDocument(JsonPayload, SIZEOF(JsonPayload));
+		
+	HttpPostCmd := TRUE;
+ELSE
+	HttpPostCmd := FALSE;
+END_IF;
+]]></ST>
+    </Implementation>
+  </POU>
+</TcPlcObject>
