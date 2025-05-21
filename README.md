@@ -1,6 +1,6 @@
-# IIoT Real-Time Analytics using MQTT and Beckhoff IPC
+# IIoT Real-Time Analytics using Python with FastAPI and Beckhoff IPC with REST API
 
-IIoT project for data exchange between PLC in OT and IT area with usage of MQTT protocol and data analytics.
+IIoT project for data exchange between PLC in OT and IT area with usage of REST API and data analytics.
 
 ## System Diagram
 ![system diagram](docs/rest-api-overview.png)
